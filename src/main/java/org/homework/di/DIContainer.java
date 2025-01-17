@@ -11,15 +11,20 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Контейнер для управления зависимостями и внедрения их в классы.
+ */
 public class DIContainer {
     private final Map<Class<?>, Object> createdServices = new HashMap<>();
-
     private final Map<Class<?>, Class<?>> registeredImplementations = new HashMap<>();
 
     public DIContainer() {
         autoRegister();
     }
 
+    /**
+     * Автоматически регистрирует все классы, помеченные аннотацией @Register.
+     */
     private void autoRegister() {
         Reflections reflections = new Reflections("org.homework",
                 new SubTypesScanner(false),
@@ -29,29 +34,33 @@ public class DIContainer {
 
         for (Class<?> clazz : annotated) {
             if (clazz.isInterface()) {
-                continue; // Если это интерфейс, пропускаем, так как ищем только реализации
+                continue; // Пропускаем интерфейсы
             }
 
             if (!verifyNoArgConstructor(clazz)) {
-                continue; // Если нет конструктора без аргументов, пропускаем класс
+                continue; // Пропускаем классы без конструктора по умолчанию
             }
 
+            // Регистрируем класс и его интерфейсы
             Class<?>[] interfaces = clazz.getInterfaces();
             for (Class<?> intf : interfaces) {
-                // Регистрируем реализацию если она еще не зарегистрирована или
-                // если класс-реализация не является интерфейсом (предпочитаем реальные реализации)
                 if (!registeredImplementations.containsKey(intf) || registeredImplementations.get(intf).isInterface()) {
                     registeredImplementations.put(intf, clazz);
                 }
             }
 
             if (interfaces.length == 0) {
-                // Если у класса нет интерфейсов, регистрируем его сам в себя
                 registeredImplementations.put(clazz, clazz);
             }
         }
     }
 
+    /**
+     * Разрешает зависимость для указанного класса.
+     *
+     * @param serviceClass Класс, для которого требуется разрешить зависимость.
+     * @return Экземпляр класса.
+     */
     public <T> T resolve(Class<T> serviceClass) {
         @SuppressWarnings("unchecked")
         T service = (T) createdServices.get(serviceClass);
@@ -61,8 +70,13 @@ public class DIContainer {
         return service;
     }
 
+    /**
+     * Создает экземпляр сервиса.
+     *
+     * @param serviceClass Класс сервиса.
+     * @return Экземпляр сервиса.
+     */
     private <T> T createService(Class<T> serviceClass) {
-        // Рефакторинг произведен для упрощения понимания
         if (serviceClass.isInterface()) {
             return createServiceFromInterface(serviceClass);
         } else {
@@ -70,6 +84,12 @@ public class DIContainer {
         }
     }
 
+    /**
+     * Создает экземпляр сервиса для интерфейса.
+     *
+     * @param serviceClass Интерфейс сервиса.
+     * @return Экземпляр реализации.
+     */
     private <T> T createServiceFromInterface(Class<T> serviceClass) {
         Class<?> implementationClass = registeredImplementations.get(serviceClass);
         if (implementationClass == null) {
@@ -78,7 +98,12 @@ public class DIContainer {
         return createServiceFromClass(implementationClass.asSubclass(serviceClass));
     }
 
-    // Специальный метод для создания сервисов для класса (не интерфейса)
+    /**
+     * Создает экземпляр сервиса для конкретного класса.
+     *
+     * @param concreteClass Класс сервиса.
+     * @return Экземпляр сервиса.
+     */
     private <T> T createServiceFromClass(Class<T> concreteClass) {
         try {
             T instance = concreteClass.getDeclaredConstructor().newInstance();
@@ -90,15 +115,18 @@ public class DIContainer {
         }
     }
 
+    /**
+     * Внедряет зависимости в объект.
+     *
+     * @param object Объект для внедрения зависимостей.
+     */
     private void injectDependencies(Object object) {
         Class<?> clazz = object.getClass();
         for (Field field : clazz.getDeclaredFields()) {
             if (field.isAnnotationPresent(Resolve.class)) {
                 field.setAccessible(true);
-
                 Class<?> dependencyType = field.getType();
                 Object dependency = resolve(dependencyType);
-
                 try {
                     field.set(object, dependency);
                 } catch (IllegalAccessException e) {
@@ -108,14 +136,18 @@ public class DIContainer {
         }
     }
 
+    /**
+     * Проверяет наличие конструктора без аргументов.
+     *
+     * @param clazz Класс для проверки.
+     * @return true, если конструктор существует, иначе false.
+     */
     private boolean verifyNoArgConstructor(Class<?> clazz) {
         try {
             clazz.getDeclaredConstructor();
             return true;
         } catch (NoSuchMethodException e) {
-            // Логировать предупреждение о том, что класс не имеет конструктора без аргументов
             return false;
         }
     }
-
 }

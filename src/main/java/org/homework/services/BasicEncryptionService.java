@@ -1,5 +1,6 @@
 package org.homework.services;
 
+import org.homework.api.EncryptionService;
 import org.homework.di.annotations.Register;
 
 import javax.crypto.Cipher;
